@@ -54,19 +54,36 @@ module EF_PSRAM_CTRL_wb (
     wire [3:0]  mw_dout;
     wire        mw_doe;
 
+    wire        me_sck;
+    wire        me_ce_n;
+    wire [3:0]  me_dout;
+    wire        me_doe;
+
     // PSRAM Reader and Writer wires
     wire        mr_rd;
     wire        mr_done;
     wire        mw_wr;
     wire        mw_done;
+    wire        me_en;
+    wire        me_done;
 
     //wire        doe;
+
+    // Reset negedge detect
+    reg         rst_delay;
+    wire        rst_negedge     =   rst_delay & ~rst_i;
 
     // WB Control Signals
     wire        wb_valid        =   cyc_i & stb_i;
     wire        wb_we           =   we_i & wb_valid;
     wire        wb_re           =   ~we_i & wb_valid;
+    wire        qpi_enable      =   rst_negedge;
+
     //wire[3:0]   wb_byte_sel     =   sel_i & {4{wb_we}};
+
+    always @ (posedge clk_i)
+        rst_delay <= rst_i;
+    
 
     // The FSM
     reg         state, nstate;
@@ -79,13 +96,13 @@ module EF_PSRAM_CTRL_wb (
     always @* begin
         case(state)
             ST_IDLE :
-                if(wb_valid)
+                if(wb_valid | qpi_enable)
                     nstate = ST_WAIT;
                 else
                     nstate = ST_IDLE;
 
             ST_WAIT :
-                if((mw_done & wb_we) | (mr_done & wb_re))
+                if((mw_done & wb_we) | (mr_done & wb_re) | me_done)
                     nstate = ST_IDLE;
                 else
                     nstate = ST_WAIT;
@@ -129,6 +146,7 @@ module EF_PSRAM_CTRL_wb (
 
     assign mr_rd    = ( (state==ST_IDLE ) & wb_re );
     assign mw_wr    = ( (state==ST_IDLE ) & wb_we );
+    assign me_en    = ( (state==ST_IDLE ) & qpi_enable );
 
     PSRAM_READER MR (
         .clk(clk_i),
@@ -161,10 +179,21 @@ module EF_PSRAM_CTRL_wb (
         .douten(mw_doe)
     );
 
-    assign sck  = wb_we ? mw_sck  : mr_sck;
-    assign ce_n = wb_we ? mw_ce_n : mr_ce_n;
-    assign dout = wb_we ? mw_dout : mr_dout;
-    assign douten  = wb_we ? {4{mw_doe}}  : {4{mr_doe}};
+    PSRAM_QPI_MODE ME(
+        .clk(clk_i),
+        .rst_n(~rst_i),
+        .en(me_en),
+        .done(me_done),
+        .sck(me_sck),
+        .ce_n(me_ce_n),
+        .dout(me_dout),
+        .douten(me_doe)
+    );
+
+    assign sck  = wb_we ? mw_sck  : mr_sck | me_sck;
+    assign ce_n = wb_we ? mw_ce_n : mr_ce_n & me_ce_n;
+    assign dout = wb_we ? mw_dout : mr_dout | me_dout;
+    assign douten  = wb_we ? {4{mw_doe}}  : {4{mr_doe}} | {4{me_doe}};
 
     assign mw_din = din;
     assign mr_din = din;

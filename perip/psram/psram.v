@@ -9,10 +9,14 @@ module psram(
 
   
   localparam S_CMD=3'b000, S_ADDR=3'b001, S_WAIT=3'b010, S_R_DATA=3'b011, S_W_DATA=3'b100, S_ERR=3'b101;
-  wire[7:0]  CMD_EBH = 8'heb;
-  wire[7:0]  CMD_38H = 8'h38;
+  localparam QSPI =1'b0  , QPI   =1'b1;
+
+  wire [7:0]  CMD_35H = 8'h35;
+  wire [7:0]  CMD_EBH = 8'heb;
+  wire [7:0]  CMD_38H = 8'h38;
   
   
+  reg         mode;
   reg   [2:0] state;
   reg   [7:0] counter;
   reg   [7:0] cmd;
@@ -39,18 +43,29 @@ module psram(
     .wdata(wdata) 
   );
 
-  // read fsm ///////////////////////////////////////////////
+  // mode switch ///////////////////////////////////////////
+  always @ (negedge sck or posedge reset) begin
+    if (mode==QPI)
+      mode <= mode;
+    else if (cmd == CMD_35H)
+      mode <= QPI;
+    else if (reset)
+      mode <= QSPI;
+  end
+
+  // fsm ///////////////////////////////////////////////////
   always @ (negedge sck or posedge reset) begin
     if (reset) 
       state <= S_CMD;
     else begin
       case (state) 
-        S_CMD    : state <= (counter == 8'd7)                      ? S_ADDR   : state;
-        S_ADDR   : state <= (cmd == CMD_EBH) && (counter == 8'd5)  ? S_WAIT   :
-                            (cmd == CMD_38H) && (counter == 8'd5)  ? S_W_DATA :
-                            (cmd != CMD_38H) && (cmd != CMD_EBH )  ? S_ERR    : state;
+        S_CMD    : state <= (counter == 8'd1) && (mode == QPI    )  ? S_ADDR   :
+                            (counter == 8'd7) && (mode == QSPI   )  ? S_ADDR   : state;
+        S_ADDR   : state <= (cmd == CMD_EBH ) && (counter == 8'd5)  ? S_WAIT   :
+                            (cmd == CMD_38H ) && (counter == 8'd5)  ? S_W_DATA :
+                            (cmd != CMD_38H ) && (cmd != CMD_EBH )  ? S_ERR    : state;
         S_W_DATA : state <= state;
-        S_WAIT   : state <= (counter == 8'd5)                      ? S_R_DATA : state;
+        S_WAIT   : state <= (counter == 8'd5)                       ? S_R_DATA : state;
         S_R_DATA : state <= state;
         default  : begin
           state <= state;
@@ -66,7 +81,8 @@ module psram(
       counter <= 8'd0;
     else begin
       case (state)
-        S_CMD   : counter <= (counter < 8'd7) ? counter + 8'd1 : 8'd0;
+        S_CMD   : counter <= (counter < 8'd1) && (mode == QPI ) ? counter + 8'd1 :
+                             (counter < 8'd7) && (mode == QSPI) ? counter + 8'd1 : 8'd0;
         S_ADDR  : counter <= (counter < 8'd5) ? counter + 8'd1 : 8'd0;
         S_WAIT  : counter <= (counter < 8'd5) ? counter + 8'd1 : 8'd0;
         default : counter <= counter + 8'd1;
@@ -79,7 +95,10 @@ module psram(
     if (reset)
       cmd <= 8'd0;
     else if (state == S_CMD) begin
-      cmd <= {cmd[6:0], dio[0]};
+      if (mode == QSPI) 
+        cmd <= {cmd[6:0], dio[0]};
+      else if (mode == QPI)
+        cmd <= {cmd[3:0], dio};
     end
   end
   
