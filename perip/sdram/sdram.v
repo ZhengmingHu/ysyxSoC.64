@@ -8,7 +8,9 @@ module sdram(
   input [12:0] a,
   input [ 1:0] ba,
   input [ 1:0] dqm,
-  inout [15:0] dq
+  inout [15:0] dq,
+
+  input [31:0] dbg_addr
 );
 
 localparam CMD_W             = 4;
@@ -26,8 +28,7 @@ localparam STATE_LOAD_MODE   = 3'd1;
 localparam STATE_ACTIVE      = 3'd2;
 localparam STATE_READ_0      = 3'd3;
 localparam STATE_READ_1      = 3'd4;
-localparam STATE_WRITE_BUF   = 3'd5;
-localparam STATE_WRITE_RAM   = 3'd6;
+localparam STATE_WRITE       = 3'd5;
 
 localparam BANK_0            = 2'd0;
 localparam BANK_1            = 2'd1;
@@ -44,115 +45,136 @@ reg [15:0] sdram_bank_1 [8191:0][511:0];
 reg [15:0] sdram_bank_2 [8191:0][511:0];
 reg [15:0] sdram_bank_3 [8191:0][511:0];
 
-reg [15:0] row_buffer           [511:0];
-
 reg [ 3:0] cmd_q;
 reg [ 1:0] bank_q;
-reg [12:0] row_q;
+reg [12:0] active_row_bank_0_q;
+reg [12:0] active_row_bank_1_q;
+reg [12:0] active_row_bank_2_q;
+reg [12:0] active_row_bank_3_q;
+
 reg [12:0] col_q;
 
-reg [12:0] mode_q;
+reg [ 3:0] bl_q;
+reg [ 2:0] cas_q;
 
 reg [15:0] rdata0_q;
 reg [15:0] rdata_q;
 
-wire[ 1:0] delay_r;
-reg [ 1:0] delay_q;
+wire[ 3:0] len_r;
+reg [ 3:0] len_q;
+wire[ 2:0] delay_r;
+reg [ 2:0] delay_q;
 
 wire       cmd_access = (cmd == CMD_READ || cmd == CMD_WRITE);
+wire       cmd_active = cmd == CMD_ACTIVE;
+wire       cmd_read   = cmd == CMD_READ;
 
-wire[ 1:0] bank = bank_q;
-wire[12:0] row  = row_q;
+wire[ 1:0] bank = (cmd_access || cmd_active) ? ba : bank_q;
 wire[ 8:0] col  = cmd_access ? a[8:0] : col_q[8:0];
+wire[12:0] active_row_bank_0  = active_row_bank_0_q;
+wire[12:0] active_row_bank_1  = active_row_bank_1_q;
+wire[12:0] active_row_bank_2  = active_row_bank_2_q;
+wire[12:0] active_row_bank_3  = active_row_bank_3_q;
 
-wire       buf_wen = cmd == CMD_WRITE || state == STATE_WRITE_BUF;
-wire       ram_wen = state == STATE_WRITE_RAM;
-wire           wen = buf_wen || ram_wen;
+wire       mode_reg_wen = cmd == CMD_LOAD_MODE;
+
+wire           wen = cmd == CMD_WRITE || state == STATE_WRITE;
 
 wire       buf_ren = cmd == CMD_READ  || state == STATE_READ_0;
 wire       ram_ren = state == STATE_READ_1;
 wire           ren = buf_ren || ram_ren;
 
 //-----------------------------------------------------------------
-//  Row Buffer Reg
-//-----------------------------------------------------------------
-always @ (posedge ck) begin
-  if (cmd == CMD_ACTIVE) begin
-    case (ba)
-      BANK_0: row_buffer <= sdram_bank_0[a][511:0];
-      BANK_1: row_buffer <= sdram_bank_1[a][511:0];
-      BANK_2: row_buffer <= sdram_bank_2[a][511:0];
-      BANK_3: row_buffer <= sdram_bank_3[a][511:0];
-      default:  ;
-
-    endcase
-  end
-end
-
-//-----------------------------------------------------------------
 //  Row Addr/Bank/Col Addr Reg
 //-----------------------------------------------------------------
 always @ (posedge ck) begin
-  if (cmd == CMD_ACTIVE) 
-    row_q <= a;
+  if (cmd == CMD_ACTIVE)
+    case (ba)
+      BANK_0: active_row_bank_0_q <= a;
+      BANK_1: active_row_bank_1_q <= a;
+      BANK_2: active_row_bank_2_q <= a;
+      BANK_3: active_row_bank_3_q <= a;
+      default:  ;
+    endcase 
 end
 
 always @ (posedge ck) begin
-  if (cmd == CMD_ACTIVE)
+  if (cmd == CMD_ACTIVE || cmd == CMD_READ || cmd == CMD_WRITE)
     bank_q <= ba;
 end
 
 always @ (posedge ck) begin
   if (cmd_access)
     col_q <= a + 1;
-  else if (|delay_r) 
+  else if (|len_r) 
     col_q <= col_q + 1;
 end
 
 //-----------------------------------------------------------------
-//  Delay Reg
+//  Len/Delay Reg
 //-----------------------------------------------------------------
-assign delay_r = (  cmd_access) ? 2'd1 :                  // FIX ME: fit mode reg
-                 (delay_q == 0) ? 2'd0 : delay_q - 2'd1;
+assign len_r   = (  cmd_access) ? bl_q - 4'd1  :
+                 (  len_q == 0) ? 4'd0         : 
+                 (delay_r == 0) ? len_q - 4'd1 : len_q;
+assign delay_r = (    cmd_read) ? cas_q - 3'd1 :                  
+                 (delay_q == 0) ? 3'd0         : delay_q - 3'd1;
+
 always @ (posedge ck) begin
+  len_q <= len_r;
   delay_q <= delay_r;
 end
 
 //-----------------------------------------------------------------
 //  State Machine
 //-----------------------------------------------------------------
+wire j_load_mode  =  cmd == CMD_LOAD_MODE;
+wire j_active     =  cmd == CMD_ACTIVE; 
+wire j_read_0     =  cmd == CMD_READ;
+wire j_read_1     =  state == STATE_READ_0 & len_r == 0;
+wire j_write      =  cmd == CMD_WRITE;
+wire j_idle       =  (state == STATE_WRITE & len_r == 0) || (state == STATE_READ_1 & len_q == 0);
+
 always @ (posedge ck) begin
-  if (cmd == CMD_ACTIVE)
-    state <= STATE_ACTIVE;
-  else if (cmd == CMD_READ)
-    state <= STATE_READ_0;
-  else if (state == STATE_READ_0 & delay_r == 0)
-    state <= STATE_READ_1;
-  else if (cmd == CMD_WRITE)
-    state <= STATE_WRITE_BUF;
-  else if (state == STATE_WRITE_BUF & delay_r == 0)
-    state <= STATE_WRITE_RAM;
-  else if ((state == STATE_WRITE_RAM & delay_q == 0) || (state == STATE_READ_1 & delay_q == 0))
-    state <= STATE_IDLE;
+  state <= j_load_mode ? STATE_LOAD_MODE :
+           j_active    ? STATE_ACTIVE    :
+           j_read_0    ? STATE_READ_0    :
+           j_read_1    ? STATE_READ_1    :
+           j_write     ? STATE_WRITE     :
+           j_idle      ? STATE_IDLE      : state;
+end
+
+//-----------------------------------------------------------------
+//  Mode Reg
+//-----------------------------------------------------------------
+always @ (posedge ck) begin
+  if (mode_reg_wen) begin
+    bl_q <= 1 << a[2:0]; 
+    cas_q <= a[6:4];
+  end
 end
 
 //-----------------------------------------------------------------
 //  Write
 //-----------------------------------------------------------------
 always @ (posedge ck) begin
-  if (buf_wen & ~dqm[1])
-    row_buffer[col][15:8] <= dq[15:8];
-  if (buf_wen & ~dqm[0])
-    row_buffer[col][ 7:0] <= dq[ 7:0];
+  if (wen & ~dqm[1]) begin
+    case (bank)
+      BANK_0: sdram_bank_0[active_row_bank_0][col][15:8] <= dq[15:8];
+      BANK_1: sdram_bank_1[active_row_bank_1][col][15:8] <= dq[15:8];
+      BANK_2: sdram_bank_2[active_row_bank_2][col][15:8] <= dq[15:8];
+      BANK_3: sdram_bank_3[active_row_bank_3][col][15:8] <= dq[15:8];
+      default:  ;
+    endcase
+  end
 end
 
 always @ (posedge ck) begin
-  if (ram_wen) begin
-    case (bank_q)
-      BANK_0: sdram_bank_0[row][511:0] <= row_buffer[511:0];
-      BANK_1: sdram_bank_1[row][511:0] <= row_buffer[511:0];
-      BANK_2: sdram_bank_2[row][511:0] <= row_buffer[511:0];
-      BANK_3: sdram_bank_3[row][511:0] <= row_buffer[511:0];
+  if (wen & ~dqm[0]) begin
+    case (bank)
+      BANK_0: sdram_bank_0[active_row_bank_0][col][ 7:0] <= dq[ 7:0];
+      BANK_1: sdram_bank_1[active_row_bank_1][col][ 7:0] <= dq[ 7:0];
+      BANK_2: sdram_bank_2[active_row_bank_2][col][ 7:0] <= dq[ 7:0];
+      BANK_3: sdram_bank_3[active_row_bank_3][col][ 7:0] <= dq[ 7:0];
       default:  ;
     endcase
   end
@@ -162,9 +184,72 @@ end
 //  read
 //-----------------------------------------------------------------
 always @ (posedge ck) begin
-  if (buf_ren) 
-    rdata0_q <= row_buffer[col];
+  if (buf_ren) begin
+    case (bank)
+      BANK_0: rdata0_q <= sdram_bank_0[active_row_bank_0][col];
+      BANK_1: rdata0_q <= sdram_bank_1[active_row_bank_1][col];
+      BANK_2: rdata0_q <= sdram_bank_2[active_row_bank_2][col];
+      BANK_3: rdata0_q <= sdram_bank_3[active_row_bank_3][col];
+      default: ;
+    endcase
+  end
 end
+
+// always @ * begin
+//   if (cmd == CMD_ACTIVE && ba==2'b10 && row==2) begin
+//     $display("sdram active:%x",sdram_bank_2[row][60]);
+//     $display("");
+//   end
+// end
+
+// reg [15:0] row_buf [511:0];
+// reg [15:0] sdram_buf;
+
+// always @ (posedge ck) begin
+//   row_buf <= row_buffer_bank_2;
+// end
+
+// always @ (posedge ck) begin
+//   sdram_buf <= sdram_bank_1[1][343];
+// end
+
+// always @ * begin
+//   if (sdram_bank_1[1][343] != sdram_buf) begin
+//     $display("write");
+//     $display("near pc:%x", dbg_addr);
+//     $display("sdram:%x", {sdram_bank_1[1][343], sdram_bank_1[1][342]});
+//     $display($time);
+//     $display("");
+//   end
+// end
+
+// always @ * begin
+//   if (row_buffer_bank_2[60]==16'h5608 && row_buf[60]!=16'h5608) begin
+//     $display("shit write 5608");
+//     $display("near pc:%x", dbg_addr);
+//     $display("sdram:%x", sdram_bank_2[2][60]);
+//     $display("");
+//   end
+// end
+
+
+// always @ * begin
+//   if ((col == 9'h156 || col == 9'h157) && ba==2'b01 && ren && bank==2'b01 && row==1) begin
+//     $display("read:%x", dq);
+//     $display("col:%x", col);
+//     $display("sdram:%x",sdram_bank_2[row][col]);
+//     $display("");
+//   end
+// end
+
+// always @ * begin
+//   if ((col == 9'h156 || col == 9'h157) && wen && bank==2'b01 && row==1) begin
+//     $display("write:%x", dq);
+//     $display("col:%x", col);
+//     $display("sdram:%x",sdram_bank_1[1][col]);
+//     $display("");
+//   end
+// end
 
 always @ (posedge ck) begin
   if (ren)
