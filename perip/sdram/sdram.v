@@ -1,4 +1,50 @@
-module sdram(
+module sdram (
+  input        clk,    
+  input        cke,
+  input        cs ,
+  input        ras,
+  input        cas,
+  input        we ,
+  input [12:0] a  ,
+  input [ 1:0] ba ,
+  input [ 3:0] dqm,
+  inout [31:0] dq ,
+
+  input [31:0] dbg_addr
+  
+);
+
+sdram_rank u_rank_0 (
+  .clk       (      clk),  
+  .cke       (      cke),
+  .cs        (       cs),
+  .ras       (      ras),
+  .cas       (      cas),
+  .we        (       we),
+  .a         (        a),
+  .ba        (       ba),
+  .dqm       ( dqm[1:0]),
+  .dq        ( dq[15:0]),
+  .dbg_addr  ( dbg_addr)
+); 
+ 
+sdram_rank u_rank_1 (
+  .clk       (      clk),  
+  .cke       (      cke),
+  .cs        (       cs),
+  .ras       (      ras),
+  .cas       (      cas),
+  .we        (       we),
+  .a         (        a),
+  .ba        (       ba),
+  .dqm       ( dqm[3:2]),
+  .dq        (dq[31:16]),
+  .dbg_addr  ( dbg_addr)
+);
+
+endmodule
+
+module sdram_rank(
   input        clk,
   input        cke,
   input        cs,
@@ -78,10 +124,10 @@ wire[12:0] active_row_bank_3  = active_row_bank_3_q;
 
 wire       mode_reg_wen = cmd == CMD_LOAD_MODE;
 
-wire           wen = cmd == CMD_WRITE || state == STATE_WRITE;
+wire           wen = bl_q == 1 ? cmd == CMD_WRITE : cmd == CMD_WRITE || state == STATE_WRITE;
 
-wire       buf_ren = cmd == CMD_READ  || state == STATE_READ_0;
-wire       ram_ren = state == STATE_READ_1;
+wire       buf_ren = bl_q == 1 ? cmd == CMD_READ : cmd == CMD_READ  || state == STATE_READ_0;
+wire       ram_ren = bl_q == 1 ? state == STATE_READ_0 : state == STATE_READ_1;
 wire           ren = buf_ren || ram_ren;
 
 //-----------------------------------------------------------------
@@ -104,7 +150,7 @@ always @ (posedge ck) begin
 end
 
 always @ (posedge ck) begin
-  if (cmd_access)
+  if (cmd_access & bl_q > 1)
     col_q <= a + 1;
   else if (|len_r) 
     col_q <= col_q + 1;
