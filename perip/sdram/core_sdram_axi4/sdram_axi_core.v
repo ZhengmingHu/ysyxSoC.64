@@ -56,7 +56,7 @@ module sdram_axi_core
     ,output          sdram_cas_o
     ,output          sdram_we_o
     ,output [  3:0]  sdram_dqm_o
-    ,output [ 12:0]  sdram_addr_o
+    ,output [ 13:0]  sdram_addr_o
     ,output [  1:0]  sdram_ba_o
     ,output [ 31:0]  sdram_data_output_o
     ,output          sdram_data_out_en_o
@@ -68,7 +68,7 @@ module sdram_axi_core
 // Key Params
 //-----------------------------------------------------------------
 parameter SDRAM_MHZ              = 50;
-parameter SDRAM_ADDR_W           = 24;
+parameter SDRAM_ADDR_W           = 25;
 parameter SDRAM_COL_W            = 9;
 parameter SDRAM_READ_LATENCY     = 1'b1;
 
@@ -94,7 +94,7 @@ localparam CMD_REFRESH       = 4'b0001;
 localparam CMD_LOAD_MODE     = 4'b0000;
 
 // Mode: Burst Length = 4 bytes, CAS=2
-localparam MODE_REG          = {3'b000,1'b0,2'b00,3'b010,1'b0,3'b000};
+localparam MODE_REG          = {1'b0, 3'b000,1'b0,2'b00,3'b010,1'b0,3'b000};
 
 // SM states
 localparam STATE_W           = 4;

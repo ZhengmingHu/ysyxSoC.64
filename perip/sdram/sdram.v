@@ -5,7 +5,7 @@ module sdram (
   input        ras,
   input        cas,
   input        we ,
-  input [12:0] a  ,
+  input [13:0] a  ,
   input [ 1:0] ba ,
   input [ 3:0] dqm,
   inout [31:0] dq ,
@@ -14,28 +14,110 @@ module sdram (
   
 );
 
-sdram_rank u_rank_0 (
+localparam CMD_ACTIVE        = 4'b0011;
+localparam CMD_LOAD_MODE     = 4'b0000;
+localparam BANK_0            = 2'd0;
+localparam BANK_1            = 2'd1;
+localparam BANK_2            = 2'd2;
+localparam BANK_3            = 2'd3;
+
+wire cs_rank_0;
+wire cs_rank_1;
+
+wire ck = cke ? clk : 1'b0;
+
+reg [13:0] active_row_bank_0_q;
+reg [13:0] active_row_bank_1_q;
+reg [13:0] active_row_bank_2_q;
+reg [13:0] active_row_bank_3_q;
+
+wire[13:0] active_row_bank_0;
+wire[13:0] active_row_bank_1;
+wire[13:0] active_row_bank_2;
+wire[13:0] active_row_bank_3;
+
+wire [3:0] cmd = {cs, ras, cas, we};
+wire       load_mode = cmd == CMD_LOAD_MODE;
+
+always @ (posedge ck) begin
+  if (cmd == CMD_ACTIVE)
+    case (ba)
+      BANK_0: active_row_bank_0_q <= a;
+      BANK_1: active_row_bank_1_q <= a;
+      BANK_2: active_row_bank_2_q <= a;
+      BANK_3: active_row_bank_3_q <= a;
+      default:  ;
+    endcase 
+end
+
+assign active_row_bank_0 = cmd == CMD_ACTIVE ? a : active_row_bank_0_q;
+assign active_row_bank_1 = cmd == CMD_ACTIVE ? a : active_row_bank_1_q;
+assign active_row_bank_2 = cmd == CMD_ACTIVE ? a : active_row_bank_2_q;
+assign active_row_bank_3 = cmd == CMD_ACTIVE ? a : active_row_bank_3_q;
+
+assign cs_rank_0 =  load_mode ? 1'b1 :
+                                ~active_row_bank_0[13] & ba == 2'd0 |
+                                ~active_row_bank_1[13] & ba == 2'd1 |
+                                ~active_row_bank_2[13] & ba == 2'd2 |
+                                ~active_row_bank_3[13] & ba == 2'd3 ;
+
+assign cs_rank_1 =  load_mode ? 1'b1 : 
+                                active_row_bank_0[13] & ba == 2'd0 |
+                                active_row_bank_1[13] & ba == 2'd1 |
+                                active_row_bank_2[13] & ba == 2'd2 |
+                                active_row_bank_3[13] & ba == 2'd3 ;
+ 
+
+sdram_rank u_rank_0_0 (
   .clk       (      clk),  
   .cke       (      cke),
-  .cs        (       cs),
+  .cs        (~cs_rank_0),
   .ras       (      ras),
   .cas       (      cas),
   .we        (       we),
-  .a         (        a),
+  .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[1:0]),
   .dq        ( dq[15:0]),
   .dbg_addr  ( dbg_addr)
 ); 
  
-sdram_rank u_rank_1 (
+sdram_rank u_rank_0_1 (
   .clk       (      clk),  
   .cke       (      cke),
-  .cs        (       cs),
+  .cs        (~cs_rank_0),
   .ras       (      ras),
   .cas       (      cas),
   .we        (       we),
-  .a         (        a),
+  .a         (  a[12:0]),
+  .ba        (       ba),
+  .dqm       ( dqm[3:2]),
+  .dq        (dq[31:16]),
+  .dbg_addr  ( dbg_addr)
+);
+
+sdram_rank u_rank_1_0 (
+  .clk       (      clk),  
+  .cke       (      cke),
+  .cs        (~cs_rank_1),
+  .ras       (      ras),
+  .cas       (      cas),
+  .we        (       we),
+  .a         (  a[12:0]),
+  .ba        (       ba),
+  .dqm       ( dqm[1:0]),
+  .dq        ( dq[15:0]),
+  .dbg_addr  ( dbg_addr)
+);
+
+sdram_rank u_rank_1_1 (
+  .clk       (      clk),  
+  .cke       (      cke),
+  .cs        (~cs_rank_1),
+  .ras       (      ras),
+  .cas       (      cas),
+  .we        (       we),
+  .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[3:2]),
   .dq        (dq[31:16]),
@@ -103,6 +185,7 @@ reg [12:0] col_q;
 reg [ 3:0] bl_q;
 reg [ 2:0] cas_q;
 
+reg        dout_en_q;
 reg [15:0] rdata0_q;
 reg [15:0] rdata_q;
 
@@ -302,6 +385,9 @@ always @ (posedge ck) begin
     rdata_q <= rdata0_q;
 end
 
-assign dq = wen ? 16'dz : rdata_q;
+always @ (posedge ck)
+  dout_en_q <= ren;
+
+assign dq = dout_en_q ? rdata_q : 16'dz;
 
 endmodule
