@@ -199,7 +199,7 @@
 `include "uart_defines.v"
 
 module uart_receiver (clk, wb_rst_i, lcr, rf_pop, srx_pad_i, enable,
-	counter_t, rf_count, rf_data_out, rf_error_bit, rf_overrun, rx_reset, lsr_mask, rstate, rf_push_pulse);
+	counter_t, rf_count, rf_data_out, rf_error_bit, rf_overrun, rx_reset, lsr_mask, rstate, rf_push_pulse, access_i);
 
 input				clk;
 input				wb_rst_i;
@@ -209,6 +209,7 @@ input				srx_pad_i;
 input				enable;
 input				rx_reset;
 input       lsr_mask;
+input 				access_i;	
 
 output	[9:0]			counter_t;
 output	[`UART_FIFO_COUNTER_W-1:0]	rf_count;
@@ -253,7 +254,8 @@ uart_rfifo #(`UART_FIFO_REC_WIDTH) fifo_rx(
 	.count(		rf_count	),
 	.error_bit(	rf_error_bit	),
 	.fifo_reset(	rx_reset	),
-	.reset_status(lsr_mask)
+	.reset_status(lsr_mask),
+	.access_i(access_i)
 );
 
 wire 		rcounter16_eq_7 = (rcounter16 == 4'd7);

@@ -191,7 +191,8 @@ raminfr #(fifo_pointer_w,fifo_width,fifo_depth) tfifo
             .a   (top),
             .dpra(bottom),
             .di  (data_in),
-            .dpo (data_out)
+            .dpo (data_out),
+            .access_i (1'b0)
         );
 
 

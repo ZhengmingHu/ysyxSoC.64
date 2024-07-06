@@ -22,6 +22,7 @@ module uart_top_apb (
    wire   ri_pad_i =1'b0;
    wire   dcd_pad_i=1'b0;
    wire   interrupt;
+   wire   access;
    //--------------------------------------------------------
    wire       reg_we;   // Write enable for registers
    wire       reg_re;   // Read enable for registers
@@ -33,6 +34,7 @@ module uart_top_apb (
    assign     rtsn = ~rts_internal;
    //--------------------------------------------------------
    assign in_pready = in_psel && in_penable;
+   assign access    = in_psel && in_penable;
    assign in_pslverr = 1'b0;
    assign reg_we  = ~reset & in_psel & ~in_penable &  in_pwrite;
    assign reg_re  = ~reset & in_psel & ~in_penable & ~in_pwrite;
@@ -81,6 +83,7 @@ module uart_top_apb (
           .wb_dat_o    (reg_dat8_r),
           .wb_we_i     (reg_we),
           .wb_re_i     (reg_re),
+          .access_i    (access),
           .modem_inputs({~ctsn, dsr_pad_i, ri_pad_i,  dcd_pad_i}),
           .stx_pad_o   (uart_tx),
           .srx_pad_i   (uart_rx),

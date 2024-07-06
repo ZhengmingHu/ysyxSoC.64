@@ -160,7 +160,8 @@ module uart_rfifo (clk,
 	count,
 	error_bit,
 	fifo_reset,
-	reset_status
+	reset_status,
+	access_i
 	);
 
 
@@ -177,6 +178,7 @@ input				pop;
 input	[fifo_width-1:0]	data_in;
 input				fifo_reset;
 input       reset_status;
+input				access_i;
 
 output	[fifo_width-1:0]	data_out;
 output				overrun;
@@ -203,7 +205,8 @@ raminfr #(fifo_pointer_w,8,fifo_depth) rfifo
 			.a(top),
 			.dpra(bottom),
 			.di(data_in[fifo_width-1:fifo_width-8]),
-			.dpo(data8_out)
+			.dpo(data8_out),
+			.access_i(access_i)
 		);
 
 always @(posedge clk or posedge wb_rst_i) // synchronous FIFO
