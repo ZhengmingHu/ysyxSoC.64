@@ -8,9 +8,7 @@ module sdram (
   input [13:0] a  ,
   input [ 1:0] ba ,
   input [ 3:0] dqm,
-  inout [31:0] dq ,
-
-  input [31:0] dbg_addr
+  inout [31:0] dq 
   
 );
 
@@ -78,8 +76,7 @@ sdram_rank u_rank_0_0 (
   .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[1:0]),
-  .dq        ( dq[15:0]),
-  .dbg_addr  ( dbg_addr)
+  .dq        ( dq[15:0])
 ); 
  
 sdram_rank u_rank_0_1 (
@@ -92,8 +89,7 @@ sdram_rank u_rank_0_1 (
   .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[3:2]),
-  .dq        (dq[31:16]),
-  .dbg_addr  ( dbg_addr)
+  .dq        (dq[31:16])
 );
 
 sdram_rank u_rank_1_0 (
@@ -106,8 +102,7 @@ sdram_rank u_rank_1_0 (
   .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[1:0]),
-  .dq        ( dq[15:0]),
-  .dbg_addr  ( dbg_addr)
+  .dq        ( dq[15:0])
 );
 
 sdram_rank u_rank_1_1 (
@@ -120,8 +115,7 @@ sdram_rank u_rank_1_1 (
   .a         (  a[12:0]),
   .ba        (       ba),
   .dqm       ( dqm[3:2]),
-  .dq        (dq[31:16]),
-  .dbg_addr  ( dbg_addr)
+  .dq        (dq[31:16])
 );
 
 endmodule
@@ -136,9 +130,7 @@ module sdram_rank(
   input [12:0] a,
   input [ 1:0] ba,
   input [ 1:0] dqm,
-  inout [15:0] dq,
-
-  input [31:0] dbg_addr
+  inout [15:0] dq
 );
 
 localparam CMD_W             = 4;

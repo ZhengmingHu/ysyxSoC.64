@@ -233,7 +233,7 @@
 `define UART_DL2 15:8
 
 module uart_regs (clk,
-    wb_rst_i, wb_addr_i, wb_dat_i, wb_dat_o, wb_we_i, wb_re_i, access_i,
+    wb_rst_i, wb_addr_i, wb_dat_i, wb_dat_o, wb_we_i, wb_re_i,
 
 // additional signals
     modem_inputs,
@@ -258,7 +258,6 @@ input [7:0]                  wb_dat_i;
 output [7:0]                 wb_dat_o;
 input                        wb_we_i;
 input                        wb_re_i;
-input                        access_i;
 
 output                       stx_pad_o;
 input                        srx_pad_i;
@@ -403,7 +402,7 @@ assign stx_pad_o = loopback ? 1'b1 : serial_out;
 
 // Receiver Instance
 uart_receiver receiver(clk, wb_rst_i, lcr, rf_pop, serial_in, enable,
-    counter_t, rf_count, rf_data_out, rf_error_bit, rf_overrun, rx_reset, lsr_mask, rstate, rf_push_pulse, access_i);
+    counter_t, rf_count, rf_data_out, rf_error_bit, rf_overrun, rx_reset, lsr_mask, rstate, rf_push_pulse);
 
 
 // Asynchronous reading here because the outputs are sampled in uart_wb.v file
