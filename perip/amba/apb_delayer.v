@@ -62,19 +62,25 @@ wire transfer = state == S_TRANS;
 wire transfer2waiting = out_pready & transfer;
 wire waiting = state == S_WAIT;
 
+reg  [31:0] counters;
 reg  [31:0] quant_counters;
 
 always @ (posedge clock) begin
-  if (reset)
+  if (reset) begin
+    counters <= 32'd0;
     quant_counters <= 32'd0;
-  else if (transfer2waiting) 
-    quant_counters <= (quant_counters + inc) >> $clog2(s);
-  else if (transfer)
+  end else if (transfer2waiting) begin
+    quant_counters <= ((quant_counters + inc) >> $clog2(s)) - counters - 1;
+  end else if (in_psel & transfer) begin
     quant_counters <= quant_counters + inc;
-  else if (quant_counters == 32'd0)
+    counters <= counters + 1;
+  end else if (quant_counters == 32'd0) begin
+    counters <= 32'd0;
     quant_counters <= 32'd0;
-  else if (waiting)
-    quant_counters <= quant_counters - 1'b1;
+  end else if (waiting) begin
+    counters <= 32'd0;
+    quant_counters <= quant_counters - 32'd1;
+  end
 end
 
 
