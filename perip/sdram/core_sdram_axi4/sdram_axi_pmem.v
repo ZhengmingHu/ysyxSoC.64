@@ -78,7 +78,7 @@ module sdram_axi_pmem
 );
 
 
-
+/* verilator lint_off BLKSEQ */
 //-------------------------------------------------------------
 // calculate_addr_next
 //-------------------------------------------------------------
@@ -310,7 +310,7 @@ assign axi_arready_o = read_active_w  && !req_rd_q && ram_accept_i && req_fifo_a
 wire [31:0] addr_w   = ((req_wr_q || req_rd_q) ? req_addr_q:
                         write_active_w ? axi_awaddr_i : axi_araddr_i);
 
-wire wr_w    = write_active_w && axi_wvalid_i;
+wire wr_w    = write_active_w & axi_wvalid_i;
 wire rd_w    = read_active_w;
 
 // RAM if
