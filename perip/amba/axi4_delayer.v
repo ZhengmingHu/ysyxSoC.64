@@ -84,13 +84,14 @@ module axi4_delayer(
   reg [ 2: 0] burst_state;
   reg [ 2: 0] w_state;
 
+  reg [31: 0] r_counters;
   reg [31: 0] r_quant_counters;
   reg [31: 0] r_cnt_burst_0;
   reg [31: 0] r_cnt_burst_1;
   reg [31: 0] r_cnt_burst_2;
   reg [31: 0] r_cnt_burst_3;
 
-
+  reg [31: 0] w_counters;
   reg [31: 0] w_quant_counters;
 
   reg         rvalid_beat_0_q;
@@ -175,6 +176,17 @@ module axi4_delayer(
       r_quant_counters <= 32'd0;
   end
 
+  always @ (posedge clock) begin
+    if (reset)
+      r_counters <= 32'd0;
+    else if (r_transfer)
+      r_counters <= r_counters + 1;
+    else if (r_counters == 0)
+      r_counters <= 32'd0;
+    else if (r_waiting)
+      r_counters <= 32'd0;
+  end
+
 // read burst counters //////////////////////////////////////////////////////////////////////////
 
   wire idle    = (r_state == S_IDLE   );
@@ -187,7 +199,7 @@ module axi4_delayer(
     if (reset)
       r_cnt_burst_0 <= 32'd0;
     else if (burst_0 & r_hs)
-      r_cnt_burst_0 <= ((r_quant_counters + inc) >> $clog2(s)) - 2;
+      r_cnt_burst_0 <= ((r_quant_counters + inc) >> $clog2(s)) - r_counters -2;
     else if (r_cnt_burst_0 == 0)
       r_cnt_burst_0 <= 32'd0;
     else 
@@ -198,7 +210,7 @@ module axi4_delayer(
     if (reset)
       r_cnt_burst_1 <= 32'd0;
     else if (burst_1 & r_hs)
-      r_cnt_burst_1 <= ((r_quant_counters + inc) >> $clog2(s)) - 2;
+      r_cnt_burst_1 <= ((r_quant_counters + inc) >> $clog2(s)) - r_counters - 2;
     else if (r_cnt_burst_1 == 0)
       r_cnt_burst_1 <= 32'd0;
     else 
@@ -209,7 +221,7 @@ module axi4_delayer(
     if (reset)
       r_cnt_burst_2 <= 32'd0;
     else if (burst_2 & r_hs)
-      r_cnt_burst_2 <= ((r_quant_counters + inc) >> $clog2(s)) - 2;
+      r_cnt_burst_2 <= ((r_quant_counters + inc) >> $clog2(s)) - r_counters - 2;
     else if (r_cnt_burst_2 == 0)
       r_cnt_burst_2 <= 32'd0;
     else 
@@ -220,7 +232,7 @@ module axi4_delayer(
     if (reset)
       r_cnt_burst_3 <= 32'd0;
     else if (burst_3 & r_hs & out_rlast)
-      r_cnt_burst_3 <= ((r_quant_counters + inc) >> $clog2(s)) - 1;
+      r_cnt_burst_3 <= ((r_quant_counters + inc) >> $clog2(s)) - r_counters - 2;
     else if (r_cnt_burst_3 == 0)
       r_cnt_burst_3 <= 32'd0;
     else 
@@ -325,6 +337,17 @@ module axi4_delayer(
       w_quant_counters <= 32'd0;
     else if (w_waiting)
       w_quant_counters <= w_quant_counters - 1;
+  end
+
+  always @ (posedge clock) begin
+    if (reset)
+      w_counters <= 32'd0;
+    else if (w_transfer)
+      w_counters <= w_counters + 1;
+    else if (w_counters == 0)
+      w_counters <= 32'd0;
+    else if (w_waiting)
+      w_counters <= 32'd0;
   end
 
   always @ (posedge clock) begin
