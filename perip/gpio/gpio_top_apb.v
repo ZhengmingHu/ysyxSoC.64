@@ -35,6 +35,7 @@ reg [31:0] gpio_led_reg;
 reg [31:0] gpio_sw_reg;
 reg [31:0] gpio_seg_lo_reg;
 reg [31:0] gpio_seg_hi_reg;
+reg        pready;
 
 //////////////////////////////////////////////////////////////////
 //
@@ -98,11 +99,25 @@ always @ (posedge clock)
 
 //////////////////////////////////////////////////////////////////
 //
+// Reg
+//
+
+always @ (posedge clock) begin
+  if (reset)
+    pready <= 1'b0;
+  else if (in_psel & in_penable & in_pready)
+    pready <= 1'b0;
+  else if (in_psel & in_penable)
+    pready <= 1'b1;
+end
+
+//////////////////////////////////////////////////////////////////
+//
 // Output
 //
 
 assign in_pslverr = 1'b0;
-assign in_pready = 1'b1;
+assign in_pready = pready;
 
 assign gpio_out   = gpio_led_reg[15:0];
 assign in_prdata  = gpio_sw_reg;

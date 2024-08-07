@@ -21,6 +21,18 @@ wire ren = in_psel & in_penable & ~in_pwrite;
 wire not_empty;
 wire [7:0] data;
 
+reg        pready;
+
+always @(posedge clock) begin
+  if(reset)begin
+    pready <= 'b0;
+  end else if(in_psel & in_penable & in_pready)begin
+    pready <= 'b0;
+  end else if(in_psel & in_penable)begin
+    pready <= 'b1;
+  end
+end
+
 ps2_keyboard u_keybrd(
   .clk       (clock),
   .clrn      (!reset),
@@ -33,6 +45,6 @@ ps2_keyboard u_keybrd(
 
 assign in_pslverr = 1'b0;
 assign in_prdata = not_empty ? {24'd0, data} : 32'd0;
-assign in_pready = 1'b1;
+assign in_pready = pready;
 
 endmodule

@@ -27,6 +27,20 @@ wire [23:0] vmem_rdata;
 wire [ 9:0] ctrl_haddr;
 wire [ 9:0] ctrl_vaddr;
 
+reg         pready;
+
+always @(posedge clock) begin
+  if(reset)begin
+    pready <= 'b0;
+  end else if(in_psel & in_penable & in_pwrite & in_pready)begin
+    pready <= 'b0;
+  end else if(in_psel & in_penable & in_pwrite)begin
+    pready <= 'b1;
+  end
+end
+
+assign in_pready  = pready;
+
 vmem u_vmem(
     .clk                                (clock                     ),
     .wen                                (vmem_wen                  ),
